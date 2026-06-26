@@ -1,9 +1,20 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
+async function requireAdmin() {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user?.role !== "ADMIN") {
+    throw new Error("Unauthorized.");
+  }
+  return session;
+}
+
 export async function getBidProfile() {
+  await requireAdmin();
   return prisma.companyBidProfile.findFirst({
     include: {
       licenses: { orderBy: { createdAt: "desc" } },

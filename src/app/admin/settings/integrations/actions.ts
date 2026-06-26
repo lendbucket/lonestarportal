@@ -7,6 +7,8 @@ import { revalidatePath } from "next/cache";
 import { syncGmail } from "@/lib/sync-gmail";
 
 export async function getGmailConnection() {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user?.role !== "ADMIN") throw new Error("Unauthorized.");
   return prisma.gmailConnection.findFirst({
     select: {
       id: true,

@@ -20,6 +20,7 @@ export async function getSolicitations(params: {
   source?: string;
   search?: string;
 }) {
+  await requireAdmin();
   const { status, source, search } = params;
 
   return prisma.solicitation.findMany({
@@ -44,6 +45,7 @@ export async function getSolicitations(params: {
 }
 
 export async function getSolicitation(id: string) {
+  await requireAdmin();
   return prisma.solicitation.findUnique({
     where: { id },
     include: {
@@ -75,6 +77,7 @@ export async function skipSolicitation(id: string) {
 }
 
 export async function getSolicitationCounts() {
+  await requireAdmin();
   const [total, newCount, draftReady, needsDoc, approved] = await Promise.all([
     prisma.solicitation.count(),
     prisma.solicitation.count({ where: { status: "NEW" } }),
@@ -401,6 +404,7 @@ export async function convertToJob(id: string) {
 }
 
 export async function getBidProfileDocuments() {
+  await requireAdmin();
   const profile = await prisma.companyBidProfile.findFirst({
     include: { documents: { orderBy: { createdAt: "desc" } } },
   });
