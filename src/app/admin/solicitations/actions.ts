@@ -2,8 +2,18 @@
 
 import { prisma } from "@/lib/prisma";
 import { notifyOwnerDraftsReady } from "@/lib/notify";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+
+async function requireAdmin() {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user?.role !== "ADMIN") {
+    throw new Error("Unauthorized.");
+  }
+  return session;
+}
 
 export async function getSolicitations(params: {
   status?: string;
@@ -45,6 +55,7 @@ export async function getSolicitation(id: string) {
 }
 
 export async function updateSolicitationStatus(id: string, status: string) {
+  await requireAdmin();
   await prisma.solicitation.update({
     where: { id },
     data: { status: status as "NEW" | "DRAFTING" | "DRAFT_READY" | "NEEDS_DOC" | "APPROVED" | "SUBMITTED" | "WON" | "LOST" | "SKIPPED" },
@@ -54,6 +65,7 @@ export async function updateSolicitationStatus(id: string, status: string) {
 }
 
 export async function skipSolicitation(id: string) {
+  await requireAdmin();
   await prisma.solicitation.update({
     where: { id },
     data: { status: "SKIPPED" },
@@ -74,6 +86,7 @@ export async function getSolicitationCounts() {
 }
 
 export async function completeSolicitation(id: string, formData: FormData) {
+  await requireAdmin();
   const text = formData.get("solicitationText") as string;
   if (!text?.trim()) throw new Error("Solicitation text is required.");
 
@@ -91,6 +104,7 @@ export async function completeSolicitation(id: string, formData: FormData) {
 }
 
 export async function uploadSolicitationDocument(id: string, formData: FormData) {
+  await requireAdmin();
   const file = formData.get("file") as File;
   if (!file || file.size === 0) throw new Error("No file provided.");
 
@@ -132,6 +146,7 @@ export async function uploadSolicitationDocument(id: string, formData: FormData)
 // ─── Draft actions ───
 
 export async function generateDraft(id: string) {
+  await requireAdmin();
   const { generateBidDraft } = await import("@/lib/ai");
 
   const solicitation = await prisma.solicitation.findUnique({
@@ -267,6 +282,7 @@ export async function generateDraft(id: string) {
 }
 
 export async function saveDraftEdits(id: string, formData: FormData) {
+  await requireAdmin();
   const editedContent = formData.get("editedContent") as string;
   const enclosureIds = formData.getAll("enclosureIds") as string[];
 
@@ -287,6 +303,7 @@ export async function saveDraftEdits(id: string, formData: FormData) {
 }
 
 export async function approveDraft(id: string, userId: string) {
+  await requireAdmin();
   const draft = await prisma.bidDraft.findUnique({
     where: { solicitationId: id },
   });
@@ -307,6 +324,7 @@ export async function approveDraft(id: string, userId: string) {
 }
 
 export async function markSubmitted(id: string, formData: FormData) {
+  await requireAdmin();
   const notes = (formData.get("submissionNotes") as string)?.trim() || null;
 
   const draft = await prisma.bidDraft.findUnique({
@@ -329,6 +347,7 @@ export async function markSubmitted(id: string, formData: FormData) {
 }
 
 export async function markWon(id: string) {
+  await requireAdmin();
   await prisma.solicitation.update({
     where: { id },
     data: { status: "WON" },
@@ -338,6 +357,7 @@ export async function markWon(id: string) {
 }
 
 export async function markLost(id: string) {
+  await requireAdmin();
   await prisma.solicitation.update({
     where: { id },
     data: { status: "LOST" },
@@ -347,6 +367,7 @@ export async function markLost(id: string) {
 }
 
 export async function convertToJob(id: string) {
+  await requireAdmin();
   const solicitation = await prisma.solicitation.findUnique({ where: { id } });
   if (!solicitation) throw new Error("Solicitation not found.");
 

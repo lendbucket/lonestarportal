@@ -1,10 +1,16 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 export async function createManualSolicitation(formData: FormData) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user?.role !== "ADMIN") {
+    throw new Error("Unauthorized.");
+  }
   const title = (formData.get("title") as string)?.trim();
   const issuingEntity = (formData.get("issuingEntity") as string)?.trim();
 
