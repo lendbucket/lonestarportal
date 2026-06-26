@@ -106,6 +106,7 @@ model User {
   sessions      Session[]
   subcontractor Subcontractor?
   smsBlasts     SmsBlast[]
+  approvedDrafts BidDraft[]
 }
 
 model Subcontractor {
@@ -209,12 +210,13 @@ model Job {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  service     Service         @relation(fields: [serviceId], references: [id])
-  city        City            @relation(fields: [cityId], references: [id])
-  lead        Lead?           @relation(fields: [leadId], references: [id])
-  assignments JobAssignment[]
-  photos      JobPhoto[]
-  smsBlasts   SmsBlast[]
+  service       Service         @relation(fields: [serviceId], references: [id])
+  city          City            @relation(fields: [cityId], references: [id])
+  lead          Lead?           @relation(fields: [leadId], references: [id])
+  assignments   JobAssignment[]
+  photos        JobPhoto[]
+  smsBlasts     SmsBlast[]
+  solicitations Solicitation[]
 }
 
 model JobAssignment {
@@ -270,4 +272,202 @@ model SmsRecipient {
 
   blast         SmsBlast      @relation(fields: [blastId], references: [id])
   subcontractor Subcontractor @relation(fields: [subcontractorId], references: [id])
+}
+
+// ─── Bid Engine Models ───
+
+model CompanyBidProfile {
+  id                  String   @id @default(cuid())
+  legalName           String
+  dba                 String?
+  addressStreet       String?
+  addressCity         String?
+  addressState        String?
+  addressZip          String?
+  phone               String?
+  email               String?
+  websiteUrl          String?
+  uei                 String?
+  cage                String?
+  duns                String?
+  naicsCodes          String[] @default([])
+  bondingCapacity     String?
+  standardMarkupNotes String?  @db.Text
+  capabilityStatement String?  @db.Text
+  w9OnFile            Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  licenses          BidLicense[]
+  insurancePolicies InsurancePolicy[]
+  certifications    Certification[]
+  references        BidReference[]
+  documents         BidDocument[]
+}
+
+model BidLicense {
+  id        String    @id @default(cuid())
+  profileId String
+  type      String
+  number    String
+  state     String
+  expiresOn DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  profile CompanyBidProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+model InsurancePolicy {
+  id           String    @id @default(cuid())
+  profileId    String
+  type         String
+  carrier      String
+  policyNumber String
+  limit        String?
+  expiresOn    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  profile CompanyBidProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+model Certification {
+  id        String    @id @default(cuid())
+  profileId String
+  name      String
+  number    String?
+  issuer    String?
+  expiresOn DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  profile CompanyBidProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+model BidReference {
+  id           String   @id @default(cuid())
+  profileId    String
+  projectName  String
+  clientName   String
+  contactName  String?
+  contactPhone String?
+  contactEmail String?
+  value        Decimal? @db.Decimal(12, 2)
+  year         Int?
+  scopeSummary String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profile CompanyBidProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+model BidDocument {
+  id        String   @id @default(cuid())
+  profileId String
+  label     String
+  fileUrl   String
+  mimeType  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile CompanyBidProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+enum SolicitationSource {
+  GMAIL
+  BIDNET
+  MANUAL
+}
+
+enum SolicitationStatus {
+  NEW
+  DRAFTING
+  DRAFT_READY
+  NEEDS_DOC
+  APPROVED
+  SUBMITTED
+  WON
+  LOST
+  SKIPPED
+}
+
+model GmailConnection {
+  id                    String    @id @default(cuid())
+  emailAddress          String
+  encryptedRefreshToken String    @db.Text
+  encryptedAccessToken  String?   @db.Text
+  accessTokenExpiresAt  DateTime?
+  lastHistoryId         String?
+  lastSyncedAt          DateTime?
+  status                String    @default("connected")
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model Solicitation {
+  id                  String             @id @default(cuid())
+  source              SolicitationSource
+  gmailMessageId      String?            @unique
+  sourceLink          String?
+  receivedAt          DateTime
+  issuingEntity       String
+  solicitationNumber  String?
+  title               String
+  scope               String?            @db.Text
+  tradeCategory       String?
+  location            String?
+  dueDate             DateTime?
+  submissionMethod    String?            @db.Text
+  submissionContact   String?            @db.Text
+  requirements        Json?
+  rawEmailExcerpt     String?            @db.Text
+  needsSourceDocument Boolean            @default(false)
+  status              SolicitationStatus @default(NEW)
+  jobId               String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  job         Job?                      @relation(fields: [jobId], references: [id])
+  attachments SolicitationAttachment[]
+  draft       BidDraft?
+}
+
+model SolicitationAttachment {
+  id             String   @id @default(cuid())
+  solicitationId String
+  label          String
+  fileUrl        String
+  mimeType       String?
+  extractedText  String?  @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  solicitation Solicitation @relation(fields: [solicitationId], references: [id], onDelete: Cascade)
+}
+
+model BidDraft {
+  id               String    @id @default(cuid())
+  solicitationId   String    @unique
+  generatedContent String    @db.Text
+  editedContent    String?   @db.Text
+  enclosures       Json?
+  aiModel          String
+  generatedAt      DateTime  @default(now())
+  approvedAt       DateTime?
+  approvedByUserId String?
+  submittedAt      DateTime?
+  submissionNotes  String?   @db.Text
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  solicitation Solicitation @relation(fields: [solicitationId], references: [id], onDelete: Cascade)
+  approvedBy   User?        @relation(fields: [approvedByUserId], references: [id])
+}
+
+model ProcessedGmailMessage {
+  id             String   @id @default(cuid())
+  gmailMessageId String   @unique
+  classification String
+  createdAt      DateTime @default(now())
 }
