@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
 
 interface NavItem {
   label: string;
   href: string;
   icon: React.ReactNode;
+  badge?: number;
 }
 
 function NavLink({ item }: { item: NavItem }) {
@@ -24,7 +26,12 @@ function NavLink({ item }: { item: NavItem }) {
       }`}
     >
       {item.icon}
-      {item.label}
+      <span className="flex-1">{item.label}</span>
+      {item.badge != null && item.badge > 0 && (
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-clay px-1.5 text-xs font-semibold text-white">
+          {item.badge}
+        </span>
+      )}
     </Link>
   );
 }
@@ -97,7 +104,31 @@ const subNav: NavItem[] = [
 export default function Sidebar() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
-  const nav = isAdmin ? adminNav : subNav;
+  const [badgeCount, setBadgeCount] = useState(0);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetch("/api/solicitations/badge")
+      .then((r) => r.json())
+      .then((d) => setBadgeCount(d.count || 0))
+      .catch(() => {});
+    // Refresh badge every 5 minutes
+    const interval = setInterval(() => {
+      fetch("/api/solicitations/badge")
+        .then((r) => r.json())
+        .then((d) => setBadgeCount(d.count || 0))
+        .catch(() => {});
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [isAdmin]);
+
+  const nav = isAdmin
+    ? adminNav.map((item) =>
+        item.href === "/admin/solicitations"
+          ? { ...item, badge: badgeCount }
+          : item
+      )
+    : subNav;
 
   return (
     <aside className="fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r border-stone/10 bg-white">

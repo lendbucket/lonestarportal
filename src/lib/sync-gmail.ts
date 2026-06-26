@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "./prisma";
+import { notifyOwnerNewSolicitations } from "./notify";
 import {
   getValidAccessToken,
   listHistory,
@@ -126,6 +127,11 @@ export async function syncGmail(): Promise<SyncResult> {
     where: { id: conn.id },
     data: { lastSyncedAt: new Date() },
   });
+
+  // Notify owner if new solicitations were created
+  if (result.solicitations > 0) {
+    await notifyOwnerNewSolicitations(result.solicitations);
+  }
 
   return result;
 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { notifyOwnerDraftsReady } from "@/lib/notify";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -249,6 +250,9 @@ export async function generateDraft(id: string) {
       where: { id },
       data: { status: "DRAFT_READY" },
     });
+
+    // Notify owner
+    await notifyOwnerDraftsReady(1);
   } catch (err: unknown) {
     // Revert status on failure
     await prisma.solicitation.update({
