@@ -1,27 +1,14 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireSubcontractor } from "@/lib/auth-guards";
 import { revalidatePath } from "next/cache";
 
-async function getSubcontractorForUser() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) throw new Error("Not authenticated.");
-
-  const sub = await prisma.subcontractor.findUnique({
-    where: { userId: session.user.id },
-  });
-
-  if (!sub) throw new Error("No subcontractor profile found.");
-  return sub;
-}
-
 export async function getMyJobs() {
-  const sub = await getSubcontractorForUser();
+  const { subcontractorId } = await requireSubcontractor();
 
   return prisma.jobAssignment.findMany({
-    where: { subcontractorId: sub.id },
+    where: { subcontractorId },
     include: {
       job: {
         include: {
@@ -35,14 +22,14 @@ export async function getMyJobs() {
 }
 
 export async function acceptJob(assignmentId: string) {
-  const sub = await getSubcontractorForUser();
+  const { subcontractorId } = await requireSubcontractor();
 
   const assignment = await prisma.jobAssignment.findUnique({
     where: { id: assignmentId },
     include: { job: true },
   });
 
-  if (!assignment || assignment.subcontractorId !== sub.id) {
+  if (!assignment || assignment.subcontractorId !== subcontractorId) {
     throw new Error("Assignment not found.");
   }
 
@@ -77,13 +64,13 @@ export async function acceptJob(assignmentId: string) {
 }
 
 export async function declineJob(assignmentId: string) {
-  const sub = await getSubcontractorForUser();
+  const { subcontractorId } = await requireSubcontractor();
 
   const assignment = await prisma.jobAssignment.findUnique({
     where: { id: assignmentId },
   });
 
-  if (!assignment || assignment.subcontractorId !== sub.id) {
+  if (!assignment || assignment.subcontractorId !== subcontractorId) {
     throw new Error("Assignment not found.");
   }
 
@@ -97,13 +84,13 @@ export async function declineJob(assignmentId: string) {
 }
 
 export async function uploadJobPhoto(jobId: string, formData: FormData) {
-  const sub = await getSubcontractorForUser();
+  const { subcontractorId } = await requireSubcontractor();
 
   // Verify the sub is assigned to this job
   const assignment = await prisma.jobAssignment.findFirst({
     where: {
       jobId,
-      subcontractorId: sub.id,
+      subcontractorId,
       status: "ACCEPTED",
     },
   });
@@ -149,7 +136,7 @@ export async function uploadJobPhoto(jobId: string, formData: FormData) {
       jobId,
       url: publicUrl,
       caption: caption?.trim() || null,
-      uploadedBySubcontractorId: sub.id,
+      uploadedBySubcontractorId: subcontractorId,
     },
   });
 

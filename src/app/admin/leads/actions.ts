@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth-guards";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { LeadStage, LeadType } from "@prisma/client";
@@ -12,6 +13,7 @@ export async function getLeads(params: {
   serviceSlug?: string;
   citySlug?: string;
 }) {
+  await requireAdmin();
   const { search, type, stage, serviceSlug, citySlug } = params;
 
   return prisma.lead.findMany({
@@ -39,6 +41,7 @@ export async function getLeads(params: {
 }
 
 export async function getLead(id: string) {
+  await requireAdmin();
   return prisma.lead.findUnique({
     where: { id },
     include: {
@@ -49,6 +52,7 @@ export async function getLead(id: string) {
 }
 
 export async function updateLeadStage(id: string, stage: LeadStage) {
+  await requireAdmin();
   await prisma.lead.update({
     where: { id },
     data: { stage },
@@ -58,6 +62,7 @@ export async function updateLeadStage(id: string, stage: LeadStage) {
 }
 
 export async function updateLeadNotes(id: string, notes: string) {
+  await requireAdmin();
   await prisma.lead.update({
     where: { id },
     data: { notes: notes.trim() },
@@ -66,6 +71,7 @@ export async function updateLeadNotes(id: string, notes: string) {
 }
 
 export async function convertLeadToJob(leadId: string) {
+  await requireAdmin();
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
     include: { service: true, city: true },
@@ -104,6 +110,7 @@ export async function convertLeadToJob(leadId: string) {
 }
 
 export async function convertLeadToSubcontractor(leadId: string) {
+  await requireAdmin();
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
 
   if (!lead || lead.type !== "SUBCONTRACTOR") {
@@ -132,6 +139,7 @@ export async function convertLeadToSubcontractor(leadId: string) {
 }
 
 export async function getServices() {
+  await requireAdmin();
   return prisma.service.findMany({
     orderBy: { name: "asc" },
     select: { id: true, slug: true, name: true },
@@ -139,6 +147,7 @@ export async function getServices() {
 }
 
 export async function getCities() {
+  await requireAdmin();
   return prisma.city.findMany({
     orderBy: [{ region: "asc" }, { name: "asc" }],
     select: { id: true, slug: true, name: true, region: true },

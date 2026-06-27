@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth-guards";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
@@ -12,6 +13,7 @@ export async function getSubcontractors(params: {
   tradeSlug?: string;
   citySlug?: string;
 }) {
+  await requireAdmin();
   const { search, status, tradeSlug, citySlug } = params;
 
   return prisma.subcontractor.findMany({
@@ -43,6 +45,7 @@ export async function getSubcontractors(params: {
 }
 
 export async function getSubcontractor(id: string) {
+  await requireAdmin();
   return prisma.subcontractor.findUnique({
     where: { id },
     include: {
@@ -54,6 +57,7 @@ export async function getSubcontractor(id: string) {
 }
 
 export async function createSubcontractor(formData: FormData) {
+  await requireAdmin();
   const companyName = formData.get("companyName") as string;
   const contactName = formData.get("contactName") as string;
   const phone = formData.get("phone") as string;
@@ -92,6 +96,7 @@ export async function createSubcontractor(formData: FormData) {
 }
 
 export async function updateSubcontractor(id: string, formData: FormData) {
+  await requireAdmin();
   const companyName = formData.get("companyName") as string;
   const contactName = formData.get("contactName") as string;
   const phone = formData.get("phone") as string;
@@ -131,6 +136,7 @@ export async function updateSubcontractor(id: string, formData: FormData) {
 }
 
 export async function activateSubcontractor(id: string) {
+  await requireAdmin();
   const sub = await prisma.subcontractor.findUnique({ where: { id } });
   if (!sub) throw new Error("Subcontractor not found.");
 
@@ -208,6 +214,7 @@ export async function activateSubcontractor(id: string) {
 }
 
 export async function deactivateSubcontractor(id: string) {
+  await requireAdmin();
   await prisma.subcontractor.update({
     where: { id },
     data: { status: "INACTIVE" },
@@ -218,6 +225,7 @@ export async function deactivateSubcontractor(id: string) {
 }
 
 export async function getServicesGrouped() {
+  await requireAdmin();
   return prisma.serviceCategory.findMany({
     orderBy: { sortOrder: "asc" },
     include: {
@@ -227,6 +235,7 @@ export async function getServicesGrouped() {
 }
 
 export async function getCities() {
+  await requireAdmin();
   return prisma.city.findMany({
     orderBy: [{ region: "asc" }, { name: "asc" }],
   });

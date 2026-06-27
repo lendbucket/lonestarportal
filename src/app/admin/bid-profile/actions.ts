@@ -1,17 +1,8 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth-guards";
 import { revalidatePath } from "next/cache";
-
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user?.role !== "ADMIN") {
-    throw new Error("Unauthorized.");
-  }
-  return session;
-}
 
 export async function getBidProfile() {
   await requireAdmin();
@@ -27,6 +18,7 @@ export async function getBidProfile() {
 }
 
 export async function upsertBidProfile(formData: FormData) {
+  await requireAdmin();
   const data = {
     legalName: (formData.get("legalName") as string)?.trim(),
     dba: (formData.get("dba") as string)?.trim() || null,
@@ -71,6 +63,7 @@ export async function upsertBidProfile(formData: FormData) {
 // ─── Licenses ───
 
 export async function addLicense(formData: FormData) {
+  await requireAdmin();
   const profile = await prisma.companyBidProfile.findFirst();
   if (!profile) throw new Error("Create the company profile first.");
 
@@ -90,6 +83,7 @@ export async function addLicense(formData: FormData) {
 }
 
 export async function deleteLicense(id: string) {
+  await requireAdmin();
   await prisma.bidLicense.delete({ where: { id } });
   revalidatePath("/admin/bid-profile");
 }
@@ -97,6 +91,7 @@ export async function deleteLicense(id: string) {
 // ─── Insurance Policies ───
 
 export async function addInsurancePolicy(formData: FormData) {
+  await requireAdmin();
   const profile = await prisma.companyBidProfile.findFirst();
   if (!profile) throw new Error("Create the company profile first.");
 
@@ -117,6 +112,7 @@ export async function addInsurancePolicy(formData: FormData) {
 }
 
 export async function deleteInsurancePolicy(id: string) {
+  await requireAdmin();
   await prisma.insurancePolicy.delete({ where: { id } });
   revalidatePath("/admin/bid-profile");
 }
@@ -124,6 +120,7 @@ export async function deleteInsurancePolicy(id: string) {
 // ─── Certifications ───
 
 export async function addCertification(formData: FormData) {
+  await requireAdmin();
   const profile = await prisma.companyBidProfile.findFirst();
   if (!profile) throw new Error("Create the company profile first.");
 
@@ -143,6 +140,7 @@ export async function addCertification(formData: FormData) {
 }
 
 export async function deleteCertification(id: string) {
+  await requireAdmin();
   await prisma.certification.delete({ where: { id } });
   revalidatePath("/admin/bid-profile");
 }
@@ -150,6 +148,7 @@ export async function deleteCertification(id: string) {
 // ─── References ───
 
 export async function addReference(formData: FormData) {
+  await requireAdmin();
   const profile = await prisma.companyBidProfile.findFirst();
   if (!profile) throw new Error("Create the company profile first.");
 
@@ -173,6 +172,7 @@ export async function addReference(formData: FormData) {
 }
 
 export async function deleteReference(id: string) {
+  await requireAdmin();
   await prisma.bidReference.delete({ where: { id } });
   revalidatePath("/admin/bid-profile");
 }
@@ -180,6 +180,7 @@ export async function deleteReference(id: string) {
 // ─── Documents ───
 
 export async function uploadBidDocument(formData: FormData) {
+  await requireAdmin();
   const profile = await prisma.companyBidProfile.findFirst();
   if (!profile) throw new Error("Create the company profile first.");
 
@@ -230,6 +231,7 @@ export async function uploadBidDocument(formData: FormData) {
 }
 
 export async function deleteBidDocument(id: string) {
+  await requireAdmin();
   await prisma.bidDocument.delete({ where: { id } });
   revalidatePath("/admin/bid-profile");
 }

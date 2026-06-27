@@ -1,14 +1,14 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth-guards";
 import { revalidatePath } from "next/cache";
 
 export async function getActiveSubcontractors(params?: {
   tradeSlug?: string;
   citySlug?: string;
 }) {
+  await requireAdmin();
   return prisma.subcontractor.findMany({
     where: {
       status: "ACTIVE",
@@ -27,6 +27,7 @@ export async function getActiveSubcontractors(params?: {
 }
 
 export async function getJobs() {
+  await requireAdmin();
   return prisma.job.findMany({
     where: {
       status: { in: ["OFFERED", "ASSIGNED", "SCHEDULED", "IN_PROGRESS"] },
@@ -37,6 +38,7 @@ export async function getJobs() {
 }
 
 export async function getSmsHistory() {
+  await requireAdmin();
   return prisma.smsBlast.findMany({
     include: {
       sentBy: { select: { name: true } },
@@ -55,8 +57,7 @@ export async function sendSmsBlast(params: {
   jobId?: string;
   subcontractorIds: string[];
 }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) throw new Error("Not authenticated.");
+  const admin = await requireAdmin();
 
   const { message, jobId, subcontractorIds } = params;
 
@@ -87,7 +88,7 @@ export async function sendSmsBlast(params: {
     data: {
       message: fullMessage,
       jobId: jobId || null,
-      sentByUserId: session.user.id,
+      sentByUserId: admin.id,
       recipients: {
         create: subs.map((sub) => ({
           subcontractorId: sub.id,
@@ -157,6 +158,7 @@ export async function sendSmsBlast(params: {
 }
 
 export async function getServices() {
+  await requireAdmin();
   return prisma.service.findMany({
     orderBy: { name: "asc" },
     select: { id: true, slug: true, name: true },
@@ -164,6 +166,7 @@ export async function getServices() {
 }
 
 export async function getCities() {
+  await requireAdmin();
   return prisma.city.findMany({
     orderBy: [{ region: "asc" }, { name: "asc" }],
     select: { id: true, slug: true, name: true, region: true },

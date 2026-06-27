@@ -1,11 +1,13 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth-guards";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { JobStatus } from "@prisma/client";
 
 export async function getJobs() {
+  await requireAdmin();
   return prisma.job.findMany({
     include: {
       service: { select: { name: true } },
@@ -19,6 +21,7 @@ export async function getJobs() {
 }
 
 export async function getJob(id: string) {
+  await requireAdmin();
   return prisma.job.findUnique({
     where: { id },
     include: {
@@ -40,6 +43,7 @@ export async function getJob(id: string) {
 }
 
 export async function createJob(formData: FormData) {
+  await requireAdmin();
   const title = formData.get("title") as string;
   const serviceId = formData.get("serviceId") as string;
   const cityId = formData.get("cityId") as string;
@@ -72,6 +76,7 @@ export async function createJob(formData: FormData) {
 }
 
 export async function updateJobStatus(id: string, status: JobStatus) {
+  await requireAdmin();
   await prisma.job.update({
     where: { id },
     data: { status },
@@ -81,6 +86,7 @@ export async function updateJobStatus(id: string, status: JobStatus) {
 }
 
 export async function updateJobSchedule(id: string, formData: FormData) {
+  await requireAdmin();
   const scheduledDate = formData.get("scheduledDate") as string;
   const amount = formData.get("amount") as string;
 
@@ -95,6 +101,7 @@ export async function updateJobSchedule(id: string, formData: FormData) {
 }
 
 export async function getMatchingSubcontractors(serviceId: string, cityId: string) {
+  await requireAdmin();
   return prisma.subcontractor.findMany({
     where: {
       status: "ACTIVE",
@@ -112,6 +119,7 @@ export async function getMatchingSubcontractors(serviceId: string, cityId: strin
 }
 
 export async function offerJobToSubs(jobId: string, subcontractorIds: string[]) {
+  await requireAdmin();
   if (subcontractorIds.length === 0) throw new Error("No subcontractors selected.");
 
   // Create assignments
@@ -135,6 +143,7 @@ export async function offerJobToSubs(jobId: string, subcontractorIds: string[]) 
 }
 
 export async function getServices() {
+  await requireAdmin();
   return prisma.service.findMany({
     orderBy: { name: "asc" },
     select: { id: true, slug: true, name: true },
@@ -142,6 +151,7 @@ export async function getServices() {
 }
 
 export async function getCities() {
+  await requireAdmin();
   return prisma.city.findMany({
     orderBy: [{ region: "asc" }, { name: "asc" }],
     select: { id: true, slug: true, name: true, region: true },
