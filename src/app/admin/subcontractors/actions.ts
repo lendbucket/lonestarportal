@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import { logActivity } from "@/lib/activity-log";
 
 const PAGE_SIZE = 25;
 
@@ -222,6 +223,8 @@ export async function activateSubcontractor(id: string) {
     console.log("RESEND_API_KEY not set. Invite URL:", setPasswordUrl);
   }
 
+  await logActivity({ action: "subcontractor_activated", entityType: "Subcontractor", entityId: id, detail: sub.companyName });
+
   revalidatePath("/admin/subcontractors");
   revalidatePath(`/admin/subcontractors/${id}`);
 }
@@ -232,6 +235,8 @@ export async function deactivateSubcontractor(id: string) {
     where: { id },
     data: { status: "INACTIVE" },
   });
+
+  await logActivity({ action: "subcontractor_deactivated", entityType: "Subcontractor", entityId: id });
 
   revalidatePath("/admin/subcontractors");
   revalidatePath(`/admin/subcontractors/${id}`);

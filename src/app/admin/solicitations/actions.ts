@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/auth-guards";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { uploadPrivateFile, getSignedUrl } from "@/lib/storage";
+import { logActivity } from "@/lib/activity-log";
 
 const PAGE_SIZE = 25;
 
@@ -322,6 +323,8 @@ export async function generateDraft(id: string) {
       data: { status: "DRAFT_READY" },
     });
 
+    await logActivity({ action: "draft_generated", entityType: "Solicitation", entityId: id, detail: solicitation.title });
+
     // Notify owner
     await notifyOwnerDraftsReady(1);
   } catch (err: unknown) {
@@ -359,7 +362,7 @@ export async function saveDraftEdits(id: string, formData: FormData) {
 }
 
 export async function approveDraft(id: string, userId: string) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const draft = await prisma.bidDraft.findUnique({
     where: { solicitationId: id },
   });
@@ -374,6 +377,8 @@ export async function approveDraft(id: string, userId: string) {
     where: { id },
     data: { status: "APPROVED" },
   });
+
+  await logActivity({ userId: admin.id, action: "draft_approved", entityType: "Solicitation", entityId: id });
 
   revalidatePath("/admin/solicitations");
   revalidatePath(`/admin/solicitations/${id}`);
@@ -398,6 +403,8 @@ export async function markSubmitted(id: string, formData: FormData) {
     data: { status: "SUBMITTED" },
   });
 
+  await logActivity({ action: "bid_submitted", entityType: "Solicitation", entityId: id });
+
   revalidatePath("/admin/solicitations");
   revalidatePath(`/admin/solicitations/${id}`);
 }
@@ -408,6 +415,7 @@ export async function markWon(id: string) {
     where: { id },
     data: { status: "WON" },
   });
+  await logActivity({ action: "bid_won", entityType: "Solicitation", entityId: id });
   revalidatePath("/admin/solicitations");
   revalidatePath(`/admin/solicitations/${id}`);
 }
@@ -418,6 +426,7 @@ export async function markLost(id: string) {
     where: { id },
     data: { status: "LOST" },
   });
+  await logActivity({ action: "bid_lost", entityType: "Solicitation", entityId: id });
   revalidatePath("/admin/solicitations");
   revalidatePath(`/admin/solicitations/${id}`);
 }

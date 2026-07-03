@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { JobStatus } from "@prisma/client";
 import { getSignedUrl } from "@/lib/storage";
+import { logActivity } from "@/lib/activity-log";
 
 const PAGE_SIZE = 25;
 
@@ -59,7 +60,7 @@ export async function getJob(id: string) {
 }
 
 export async function createJob(formData: FormData) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const title = formData.get("title") as string;
   const serviceId = formData.get("serviceId") as string;
   const cityId = formData.get("cityId") as string;
@@ -87,16 +88,19 @@ export async function createJob(formData: FormData) {
     },
   });
 
+  await logActivity({ userId: admin.id, action: "job_created", entityType: "Job", entityId: job.id, detail: title.trim() });
+
   revalidatePath("/admin/jobs");
   redirect(`/admin/jobs/${job.id}`);
 }
 
 export async function updateJobStatus(id: string, status: JobStatus) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   await prisma.job.update({
     where: { id },
     data: { status },
   });
+  await logActivity({ userId: admin.id, action: "job_status_change", entityType: "Job", entityId: id, detail: `Status changed to ${status}` });
   revalidatePath("/admin/jobs");
   revalidatePath(`/admin/jobs/${id}`);
 }
@@ -135,7 +139,7 @@ export async function getMatchingSubcontractors(serviceId: string, cityId: strin
 }
 
 export async function offerJobToSubs(jobId: string, subcontractorIds: string[]) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   if (subcontractorIds.length === 0) throw new Error("No subcontractors selected.");
 
   // Create assignments
@@ -164,6 +168,8 @@ export async function offerJobToSubs(jobId: string, subcontractorIds: string[]) 
 
   const portalUrl = "https://portal.lonestarcontractinggroup.com";
   const jobLink = `${portalUrl}/portal/jobs/${jobId}`;
+
+  await logActivity({ userId: admin.id, action: "offer_sent", entityType: "Job", entityId: jobId, detail: `Offered to ${subcontractorIds.length} subcontractor(s)` });
 
   for (const sub of subs) {
     const msg = [

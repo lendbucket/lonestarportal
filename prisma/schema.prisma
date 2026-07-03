@@ -473,6 +473,21 @@ model ProcessedGmailMessage {
   createdAt      DateTime @default(now())
 }
 
+// ─── Activity Log ───
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  detail     String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
 // ─── Rate Limiting ───
 
 model LoginAttempt {

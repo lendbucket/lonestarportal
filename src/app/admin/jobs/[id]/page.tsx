@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getJob, getMatchingSubcontractors, getJobPhotoSignedUrl } from "../actions";
+import { getEntityActivity } from "@/lib/activity-log";
 import { JobStatusFlow } from "./JobStatusFlow";
 import { OfferPanel } from "./OfferPanel";
 import { JobScheduleForm } from "./JobScheduleForm";
@@ -23,7 +24,10 @@ export default async function JobDetailPage({ params }: Props) {
   const job = await getJob(id);
   if (!job) notFound();
 
-  const matchingSubs = await getMatchingSubcontractors(job.serviceId, job.cityId);
+  const [matchingSubs, activityLog] = await Promise.all([
+    getMatchingSubcontractors(job.serviceId, job.cityId),
+    getEntityActivity("Job", id),
+  ]);
 
   // Filter out subs already offered
   const offeredSubIds = new Set(job.assignments.map((a) => a.subcontractorId));
@@ -136,6 +140,23 @@ export default async function JobDetailPage({ params }: Props) {
         <div className="space-y-4">
           <JobStatusFlow job={job} />
           <JobScheduleForm job={job} />
+
+          {activityLog.length > 0 && (
+            <div className="rounded-lg border border-stone/10 bg-white p-5 shadow-sm">
+              <h2 className="text-sm font-semibold text-charcoal mb-3">Activity</h2>
+              <div className="space-y-2">
+                {activityLog.map((entry) => (
+                  <div key={entry.id} className="text-xs">
+                    <p className="text-charcoal">
+                      {entry.action.replace(/_/g, " ")}
+                    </p>
+                    {entry.detail && <p className="text-stone">{entry.detail}</p>}
+                    <p className="text-stone/60">{new Date(entry.createdAt).toLocaleString()}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

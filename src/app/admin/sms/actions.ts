@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guards";
 import { revalidatePath } from "next/cache";
 import { sendSms, isTwilioConfigured, normalizePhone } from "@/lib/twilio";
+import { logActivity } from "@/lib/activity-log";
 
 export async function getActiveSubcontractors(params?: {
   tradeSlug?: string;
@@ -129,6 +130,8 @@ export async function sendSmsBlast(params: {
       data: { status: "not_configured" },
     });
   }
+
+  await logActivity({ userId: admin.id, action: "sms_blast_sent", entityType: "SmsBlast", entityId: blast.id, detail: `${blast.recipients.length} recipient(s)` });
 
   revalidatePath("/admin/sms");
 }

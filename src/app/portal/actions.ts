@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireSubcontractor } from "@/lib/auth-guards";
 import { revalidatePath } from "next/cache";
 import { uploadPrivateFile, getSignedUrl } from "@/lib/storage";
+import { logActivity } from "@/lib/activity-log";
 
 export async function getJobPhotoUrl(photoPath: string) {
   await requireSubcontractor();
@@ -68,6 +69,8 @@ export async function acceptJob(assignmentId: string) {
     data: { status: "ASSIGNED" },
   });
 
+  await logActivity({ userId: undefined, action: "offer_accepted", entityType: "Job", entityId: assignment.jobId, detail: `Accepted by ${assignment.subcontractor.companyName}` });
+
   // Notify admin by email (Resend)
   const apiKey = process.env.RESEND_API_KEY;
   const adminEmail = process.env.ADMIN_EMAIL;
@@ -116,10 +119,12 @@ export async function declineJob(assignmentId: string) {
     throw new Error("Assignment not found.");
   }
 
-  await prisma.jobAssignment.update({
+  const updated = await prisma.jobAssignment.update({
     where: { id: assignmentId },
     data: { status: "DECLINED", respondedAt: new Date() },
   });
+
+  await logActivity({ action: "offer_declined", entityType: "Job", entityId: updated.jobId });
 
   revalidatePath("/portal");
   revalidatePath("/admin/jobs");

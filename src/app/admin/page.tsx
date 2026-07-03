@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getRecentActivity } from "@/lib/activity-log";
 import Link from "next/link";
 
 function DashTile({
@@ -142,6 +143,8 @@ export default async function AdminDashboard() {
       },
     }),
   ]);
+
+  const recentActivity = await getRecentActivity(20);
 
   // Also check for already expired items
   const [expiredLicenses, expiredInsurance, expiredCerts] = await Promise.all([
@@ -322,6 +325,61 @@ export default async function AdminDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Recent activity */}
+      <div className="mt-8 rounded-lg border border-stone/10 bg-white shadow-sm">
+        <div className="border-b border-stone/10 px-6 py-4">
+          <h2 className="font-display text-lg font-semibold text-slate">
+            Recent Activity
+          </h2>
+        </div>
+        <div className="divide-y divide-stone/10">
+          {recentActivity.length === 0 ? (
+            <p className="px-6 py-4 text-sm text-stone">No activity recorded yet.</p>
+          ) : (
+            recentActivity.map((entry) => {
+              const entityLink = getEntityLink(entry.entityType, entry.entityId);
+              return (
+                <div key={entry.id} className="flex items-center gap-4 px-6 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-charcoal">
+                      <span className="font-medium">{formatAction(entry.action)}</span>
+                      {entry.detail && (
+                        <span className="text-stone"> - {entry.detail}</span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    {entityLink && (
+                      <Link href={entityLink} className="text-xs text-clay hover:underline">
+                        View
+                      </Link>
+                    )}
+                    <span className="text-xs text-stone">
+                      {new Date(entry.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
     </div>
   );
+}
+
+function formatAction(action: string): string {
+  return action.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function getEntityLink(entityType: string, entityId: string | null): string | null {
+  if (!entityId) return null;
+  switch (entityType) {
+    case "Lead": return `/admin/leads/${entityId}`;
+    case "Job": return `/admin/jobs/${entityId}`;
+    case "Solicitation": return `/admin/solicitations/${entityId}`;
+    case "Subcontractor": return `/admin/subcontractors/${entityId}`;
+    default: return null;
+  }
 }

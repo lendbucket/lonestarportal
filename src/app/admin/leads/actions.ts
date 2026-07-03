@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/auth-guards";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { LeadStage, LeadType } from "@prisma/client";
+import { logActivity } from "@/lib/activity-log";
 
 const PAGE_SIZE = 25;
 
@@ -118,11 +119,12 @@ export async function getLead(id: string) {
 }
 
 export async function updateLeadStage(id: string, stage: LeadStage) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   await prisma.lead.update({
     where: { id },
     data: { stage },
   });
+  await logActivity({ userId: admin.id, action: "lead_stage_change", entityType: "Lead", entityId: id, detail: `Stage changed to ${stage}` });
   revalidatePath("/admin/leads");
   revalidatePath(`/admin/leads/${id}`);
 }
@@ -137,7 +139,7 @@ export async function updateLeadNotes(id: string, notes: string) {
 }
 
 export async function convertLeadToJob(leadId: string) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
     include: { service: true, city: true },
@@ -169,6 +171,9 @@ export async function convertLeadToJob(leadId: string) {
     where: { id: leadId },
     data: { stage: "WON" },
   });
+
+  await logActivity({ userId: admin.id, action: "lead_converted", entityType: "Lead", entityId: leadId, detail: `Converted to job ${job.id}` });
+  await logActivity({ userId: admin.id, action: "job_created", entityType: "Job", entityId: job.id, detail: `Created from lead ${leadId}` });
 
   revalidatePath("/admin/leads");
   revalidatePath("/admin/jobs");
