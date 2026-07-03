@@ -471,3 +471,14 @@ model ProcessedGmailMessage {
   classification String
   createdAt      DateTime @default(now())
 }
+
+// ─── Rate Limiting ───
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  key       String
+  success   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+}
