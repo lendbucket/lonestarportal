@@ -7,33 +7,102 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { uploadPrivateFile, getSignedUrl } from "@/lib/storage";
 
+const PAGE_SIZE = 25;
+
+function buildSolicitationWhere(params: {
+  status?: string;
+  source?: string;
+  search?: string;
+}) {
+  const { status, source, search } = params;
+  return {
+    ...(status && status !== "ALL" ? { status: status as "NEW" | "DRAFTING" | "DRAFT_READY" | "NEEDS_DOC" | "APPROVED" | "SUBMITTED" | "WON" | "LOST" | "SKIPPED" } : {}),
+    ...(source && source !== "ALL" ? { source: source as "GMAIL" | "BIDNET" | "MANUAL" } : {}),
+    ...(search
+      ? {
+          OR: [
+            { title: { contains: search, mode: "insensitive" as const } },
+            { issuingEntity: { contains: search, mode: "insensitive" as const } },
+            { solicitationNumber: { contains: search, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+}
+
 export async function getSolicitations(params: {
+  status?: string;
+  source?: string;
+  search?: string;
+  page?: number;
+}) {
+  await requireAdmin();
+  const page = Math.max(1, params.page || 1);
+  const where = buildSolicitationWhere(params);
+
+  const [items, total] = await Promise.all([
+    prisma.solicitation.findMany({
+      where,
+      include: {
+        draft: { select: { id: true, generatedAt: true, approvedAt: true, submittedAt: true } },
+      },
+      orderBy: [{ dueDate: "asc" }, { receivedAt: "desc" }],
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+    prisma.solicitation.count({ where }),
+  ]);
+
+  return { items, total, page, pageSize: PAGE_SIZE, totalPages: Math.ceil(total / PAGE_SIZE) };
+}
+
+export async function exportSolicitationsCsv(params: {
   status?: string;
   source?: string;
   search?: string;
 }) {
   await requireAdmin();
-  const { status, source, search } = params;
+  const where = buildSolicitationWhere(params);
 
-  return prisma.solicitation.findMany({
-    where: {
-      ...(status && status !== "ALL" ? { status: status as "NEW" | "DRAFTING" | "DRAFT_READY" | "NEEDS_DOC" | "APPROVED" | "SUBMITTED" | "WON" | "LOST" | "SKIPPED" } : {}),
-      ...(source && source !== "ALL" ? { source: source as "GMAIL" | "BIDNET" | "MANUAL" } : {}),
-      ...(search
-        ? {
-            OR: [
-              { title: { contains: search, mode: "insensitive" } },
-              { issuingEntity: { contains: search, mode: "insensitive" } },
-              { solicitationNumber: { contains: search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    },
-    include: {
-      draft: { select: { id: true, generatedAt: true, approvedAt: true, submittedAt: true } },
-    },
+  const rows = await prisma.solicitation.findMany({
+    where,
     orderBy: [{ dueDate: "asc" }, { receivedAt: "desc" }],
+    select: {
+      title: true,
+      issuingEntity: true,
+      solicitationNumber: true,
+      source: true,
+      status: true,
+      tradeCategory: true,
+      location: true,
+      dueDate: true,
+      receivedAt: true,
+    },
   });
+
+  const header = "Title,Issuing Entity,Number,Source,Status,Trade Category,Location,Due Date,Received";
+  const lines = rows.map((r) =>
+    [
+      csvEscape(r.title),
+      csvEscape(r.issuingEntity),
+      csvEscape(r.solicitationNumber || ""),
+      r.source,
+      r.status,
+      csvEscape(r.tradeCategory || ""),
+      csvEscape(r.location || ""),
+      r.dueDate ? new Date(r.dueDate).toISOString().split("T")[0] : "",
+      new Date(r.receivedAt).toISOString().split("T")[0],
+    ].join(",")
+  );
+
+  return header + "\n" + lines.join("\n");
+}
+
+function csvEscape(val: string): string {
+  if (val.includes(",") || val.includes('"') || val.includes("\n")) {
+    return `"${val.replace(/"/g, '""')}"`;
+  }
+  return val;
 }
 
 export async function getSolicitation(id: string) {

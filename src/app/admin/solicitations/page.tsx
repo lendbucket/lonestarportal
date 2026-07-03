@@ -1,7 +1,9 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { getSolicitations, getSolicitationCounts } from "./actions";
+import { getSolicitations, getSolicitationCounts, exportSolicitationsCsv } from "./actions";
+import { Pagination } from "@/components/Pagination";
+import { CsvExportButton } from "@/components/CsvExportButton";
 
 const statusColors: Record<string, string> = {
   NEW: "bg-blue-100 text-blue-800",
@@ -28,13 +30,21 @@ const statusLabels: Record<string, string> = {
 };
 
 export default async function SolicitationsPage(props: {
-  searchParams: Promise<{ status?: string; source?: string; search?: string }>;
+  searchParams: Promise<{ status?: string; source?: string; search?: string; page?: string }>;
 }) {
   const searchParams = await props.searchParams;
-  const [solicitations, counts] = await Promise.all([
-    getSolicitations(searchParams),
+  const page = parseInt(searchParams.page || "1", 10);
+  const [result, counts] = await Promise.all([
+    getSolicitations({ ...searchParams, page }),
     getSolicitationCounts(),
   ]);
+
+  // Build the base href for pagination links preserving filters
+  const filterParams = new URLSearchParams();
+  if (searchParams.status) filterParams.set("status", searchParams.status);
+  if (searchParams.source) filterParams.set("source", searchParams.source);
+  if (searchParams.search) filterParams.set("search", searchParams.search);
+  const baseHref = `/admin/solicitations${filterParams.toString() ? `?${filterParams}` : ""}`;
 
   return (
     <div>
@@ -49,6 +59,14 @@ export default async function SolicitationsPage(props: {
           </p>
         </div>
         <div className="flex gap-3">
+          <CsvExportButton
+            exportAction={exportSolicitationsCsv.bind(null, {
+              status: searchParams.status,
+              source: searchParams.source,
+              search: searchParams.search,
+            })}
+            filename="solicitations.csv"
+          />
           <Link
             href="/admin/solicitations/new"
             className="rounded-md bg-clay px-4 py-2 text-sm font-medium text-white hover:bg-clay/90 transition-colors"
@@ -107,7 +125,7 @@ export default async function SolicitationsPage(props: {
       </form>
 
       {/* Table */}
-      {solicitations.length === 0 ? (
+      {result.items.length === 0 ? (
         <div className="rounded-lg border border-stone/10 bg-white p-12 text-center">
           <p className="text-sm text-stone">
             No solicitations found. Connect Gmail and sync to start receiving
@@ -115,83 +133,59 @@ export default async function SolicitationsPage(props: {
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-stone/10 bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="bg-bone/50">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium text-stone">
-                  Title
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-stone">
-                  Issuing Entity
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-stone">
-                  Due Date
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-stone">
-                  Source
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-stone">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone/10">
-              {solicitations.map((sol) => {
-                const isPastDue =
-                  sol.dueDate && new Date(sol.dueDate) < new Date();
-                return (
-                  <tr key={sol.id} className="hover:bg-bone/30 transition-colors">
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/admin/solicitations/${sol.id}`}
-                        className="font-medium text-charcoal hover:text-clay"
-                      >
-                        {sol.title}
-                      </Link>
-                      {sol.solicitationNumber && (
-                        <p className="text-xs text-stone">
-                          #{sol.solicitationNumber}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-stone">
-                      {sol.issuingEntity}
-                    </td>
-                    <td className="px-4 py-3">
-                      {sol.dueDate ? (
-                        <span
-                          className={
-                            isPastDue ? "text-red-600 font-medium" : "text-charcoal"
-                          }
+        <>
+          <div className="overflow-hidden rounded-lg border border-stone/10 bg-white shadow-sm">
+            <table className="w-full text-sm">
+              <thead className="bg-bone/50">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium text-stone">Title</th>
+                  <th className="px-4 py-3 text-left font-medium text-stone">Issuing Entity</th>
+                  <th className="px-4 py-3 text-left font-medium text-stone">Due Date</th>
+                  <th className="px-4 py-3 text-left font-medium text-stone">Source</th>
+                  <th className="px-4 py-3 text-left font-medium text-stone">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone/10">
+                {result.items.map((sol) => {
+                  const isPastDue = sol.dueDate && new Date(sol.dueDate) < new Date();
+                  return (
+                    <tr key={sol.id} className="hover:bg-bone/30 transition-colors">
+                      <td className="px-4 py-3">
+                        <Link
+                          href={`/admin/solicitations/${sol.id}`}
+                          className="font-medium text-charcoal hover:text-clay"
                         >
-                          {new Date(sol.dueDate).toLocaleDateString()}
-                          {isPastDue && (
-                            <span className="ml-1 text-xs">(past due)</span>
-                          )}
+                          {sol.title}
+                        </Link>
+                        {sol.solicitationNumber && (
+                          <p className="text-xs text-stone">#{sol.solicitationNumber}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-stone">{sol.issuingEntity}</td>
+                      <td className="px-4 py-3">
+                        {sol.dueDate ? (
+                          <span className={isPastDue ? "text-red-600 font-medium" : "text-charcoal"}>
+                            {new Date(sol.dueDate).toLocaleDateString()}
+                            {isPastDue && <span className="ml-1 text-xs">(past due)</span>}
+                          </span>
+                        ) : (
+                          <span className="text-stone">--</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-stone uppercase">{sol.source}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[sol.status] || "bg-stone/10 text-stone"}`}>
+                          {statusLabels[sol.status] || sol.status}
                         </span>
-                      ) : (
-                        <span className="text-stone">--</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-stone uppercase">
-                      {sol.source}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                          statusColors[sol.status] || "bg-stone/10 text-stone"
-                        }`}
-                      >
-                        {statusLabels[sol.status] || sol.status}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <Pagination page={result.page} totalPages={result.totalPages} total={result.total} baseHref={baseHref} />
+        </>
       )}
     </div>
   );

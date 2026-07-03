@@ -7,41 +7,54 @@ import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
+const PAGE_SIZE = 25;
+
 export async function getSubcontractors(params: {
   search?: string;
   status?: string;
   tradeSlug?: string;
   citySlug?: string;
+  page?: number;
 }) {
   await requireAdmin();
   const { search, status, tradeSlug, citySlug } = params;
+  const page = Math.max(1, params.page || 1);
 
-  return prisma.subcontractor.findMany({
-    where: {
-      ...(search
-        ? {
-            OR: [
-              { companyName: { contains: search, mode: "insensitive" } },
-              { contactName: { contains: search, mode: "insensitive" } },
-              { email: { contains: search, mode: "insensitive" } },
-              { phone: { contains: search } },
-            ],
-          }
-        : {}),
-      ...(status && status !== "ALL" ? { status: status as "PENDING" | "ACTIVE" | "INACTIVE" } : {}),
-      ...(tradeSlug
-        ? { trades: { some: { slug: tradeSlug } } }
-        : {}),
-      ...(citySlug
-        ? { serviceAreas: { some: { slug: citySlug } } }
-        : {}),
-    },
-    include: {
-      trades: { select: { id: true, name: true, slug: true } },
-      serviceAreas: { select: { id: true, name: true, slug: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const where = {
+    ...(search
+      ? {
+          OR: [
+            { companyName: { contains: search, mode: "insensitive" as const } },
+            { contactName: { contains: search, mode: "insensitive" as const } },
+            { email: { contains: search, mode: "insensitive" as const } },
+            { phone: { contains: search } },
+          ],
+        }
+      : {}),
+    ...(status && status !== "ALL" ? { status: status as "PENDING" | "ACTIVE" | "INACTIVE" } : {}),
+    ...(tradeSlug
+      ? { trades: { some: { slug: tradeSlug } } }
+      : {}),
+    ...(citySlug
+      ? { serviceAreas: { some: { slug: citySlug } } }
+      : {}),
+  };
+
+  const [items, total] = await Promise.all([
+    prisma.subcontractor.findMany({
+      where,
+      include: {
+        trades: { select: { id: true, name: true, slug: true } },
+        serviceAreas: { select: { id: true, name: true, slug: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+    prisma.subcontractor.count({ where }),
+  ]);
+
+  return { items, total, page, pageSize: PAGE_SIZE, totalPages: Math.ceil(total / PAGE_SIZE) };
 }
 
 export async function getSubcontractor(id: string) {

@@ -7,18 +7,33 @@ import { redirect } from "next/navigation";
 import { JobStatus } from "@prisma/client";
 import { getSignedUrl } from "@/lib/storage";
 
-export async function getJobs() {
+const PAGE_SIZE = 25;
+
+export async function getJobs(params?: { status?: string; page?: number }) {
   await requireAdmin();
-  return prisma.job.findMany({
-    include: {
-      service: { select: { name: true } },
-      city: { select: { name: true } },
-      assignments: {
-        include: { subcontractor: { select: { companyName: true } } },
+  const page = Math.max(1, params?.page || 1);
+  const where = params?.status && params.status !== "ALL"
+    ? { status: params.status as JobStatus }
+    : {};
+
+  const [items, total] = await Promise.all([
+    prisma.job.findMany({
+      where,
+      include: {
+        service: { select: { name: true } },
+        city: { select: { name: true } },
+        assignments: {
+          include: { subcontractor: { select: { companyName: true } } },
+        },
       },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+    prisma.job.count({ where }),
+  ]);
+
+  return { items, total, page, pageSize: PAGE_SIZE, totalPages: Math.ceil(total / PAGE_SIZE) };
 }
 
 export async function getJob(id: string) {

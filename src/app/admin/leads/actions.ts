@@ -6,7 +6,63 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { LeadStage, LeadType } from "@prisma/client";
 
+const PAGE_SIZE = 25;
+
+function buildLeadWhere(params: {
+  search?: string;
+  type?: string;
+  stage?: string;
+  serviceSlug?: string;
+  citySlug?: string;
+}) {
+  const { search, type, stage, serviceSlug, citySlug } = params;
+  return {
+    ...(search
+      ? {
+          OR: [
+            { name: { contains: search, mode: "insensitive" as const } },
+            { email: { contains: search, mode: "insensitive" as const } },
+            { phone: { contains: search } },
+          ],
+        }
+      : {}),
+    ...(type && type !== "ALL" ? { type: type as LeadType } : {}),
+    ...(stage && stage !== "ALL" ? { stage: stage as LeadStage } : {}),
+    ...(serviceSlug ? { service: { slug: serviceSlug } } : {}),
+    ...(citySlug ? { city: { slug: citySlug } } : {}),
+  };
+}
+
 export async function getLeads(params: {
+  search?: string;
+  type?: string;
+  stage?: string;
+  serviceSlug?: string;
+  citySlug?: string;
+  page?: number;
+}) {
+  await requireAdmin();
+  const page = Math.max(1, params.page || 1);
+  const where = buildLeadWhere(params);
+
+  const [items, total] = await Promise.all([
+    prisma.lead.findMany({
+      where,
+      include: {
+        service: { select: { id: true, name: true } },
+        city: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+    prisma.lead.count({ where }),
+  ]);
+
+  return { items, total, page, pageSize: PAGE_SIZE, totalPages: Math.ceil(total / PAGE_SIZE) };
+}
+
+export async function exportLeadsCsv(params: {
   search?: string;
   type?: string;
   stage?: string;
@@ -14,30 +70,40 @@ export async function getLeads(params: {
   citySlug?: string;
 }) {
   await requireAdmin();
-  const { search, type, stage, serviceSlug, citySlug } = params;
+  const where = buildLeadWhere(params);
 
-  return prisma.lead.findMany({
-    where: {
-      ...(search
-        ? {
-            OR: [
-              { name: { contains: search, mode: "insensitive" } },
-              { email: { contains: search, mode: "insensitive" } },
-              { phone: { contains: search } },
-            ],
-          }
-        : {}),
-      ...(type && type !== "ALL" ? { type: type as LeadType } : {}),
-      ...(stage && stage !== "ALL" ? { stage: stage as LeadStage } : {}),
-      ...(serviceSlug ? { service: { slug: serviceSlug } } : {}),
-      ...(citySlug ? { city: { slug: citySlug } } : {}),
-    },
+  const rows = await prisma.lead.findMany({
+    where,
     include: {
-      service: { select: { id: true, name: true } },
-      city: { select: { id: true, name: true } },
+      service: { select: { name: true } },
+      city: { select: { name: true } },
     },
     orderBy: { createdAt: "desc" },
   });
+
+  const header = "Name,Email,Phone,Type,Stage,Service,City,Source,Date";
+  const lines = rows.map((r) =>
+    [
+      csvEscape(r.name),
+      csvEscape(r.email || ""),
+      csvEscape(r.phone || ""),
+      r.type,
+      r.stage,
+      csvEscape(r.service?.name || ""),
+      csvEscape(r.city?.name || ""),
+      r.source,
+      new Date(r.createdAt).toISOString().split("T")[0],
+    ].join(",")
+  );
+
+  return header + "\n" + lines.join("\n");
+}
+
+function csvEscape(val: string): string {
+  if (val.includes(",") || val.includes('"') || val.includes("\n")) {
+    return `"${val.replace(/"/g, '""')}"`;
+  }
+  return val;
 }
 
 export async function getLead(id: string) {

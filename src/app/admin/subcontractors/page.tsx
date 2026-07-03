@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { getSubcontractors, getServicesGrouped, getCities } from "./actions";
 import { SubcontractorFilters } from "./SubcontractorFilters";
+import { Pagination } from "@/components/Pagination";
 
 interface Props {
   searchParams: Promise<{
@@ -10,6 +11,7 @@ interface Props {
     status?: string;
     trade?: string;
     city?: string;
+    page?: string;
   }>;
 }
 
@@ -21,12 +23,14 @@ const statusColors: Record<string, string> = {
 
 export default async function SubcontractorsPage({ searchParams }: Props) {
   const params = await searchParams;
-  const [subs, categories, cities] = await Promise.all([
+  const page = parseInt(params.page || "1", 10);
+  const [result, categories, cities] = await Promise.all([
     getSubcontractors({
       search: params.search,
       status: params.status,
       tradeSlug: params.trade,
       citySlug: params.city,
+      page,
     }),
     getServicesGrouped(),
     getCities(),
@@ -34,12 +38,19 @@ export default async function SubcontractorsPage({ searchParams }: Props) {
 
   const services = categories.flatMap((c) => c.services);
 
+  const filterParams = new URLSearchParams();
+  if (params.search) filterParams.set("search", params.search);
+  if (params.status) filterParams.set("status", params.status);
+  if (params.trade) filterParams.set("trade", params.trade);
+  if (params.city) filterParams.set("city", params.city);
+  const baseHref = `/admin/subcontractors${filterParams.toString() ? `?${filterParams}` : ""}`;
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-slate">Subcontractors</h1>
-          <p className="mt-1 text-sm text-stone">{subs.length} subcontractor{subs.length !== 1 ? "s" : ""}</p>
+          <p className="mt-1 text-sm text-stone">{result.total} subcontractor{result.total !== 1 ? "s" : ""}</p>
         </div>
         <Link
           href="/admin/subcontractors/new"
@@ -63,14 +74,14 @@ export default async function SubcontractorsPage({ searchParams }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-stone/10">
-            {subs.length === 0 ? (
+            {result.items.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-sm text-stone">
                   No subcontractors found.
                 </td>
               </tr>
             ) : (
-              subs.map((sub) => (
+              result.items.map((sub) => (
                 <tr key={sub.id} className="hover:bg-bone/30 transition-colors">
                   <td className="px-4 py-3">
                     <Link
@@ -119,6 +130,8 @@ export default async function SubcontractorsPage({ searchParams }: Props) {
           </tbody>
         </table>
       </div>
+
+      <Pagination page={result.page} totalPages={result.totalPages} total={result.total} baseHref={baseHref} />
     </div>
   );
 }
