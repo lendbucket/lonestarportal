@@ -181,8 +181,7 @@ async function processMessage(
       try {
         const attData = await getAttachment(accessToken, messageId, att.attachmentId);
         const buffer = decodeBase64UrlToBuffer(attData.data);
-        // Basic PDF text extraction: try to pull readable text from the buffer
-        const text = extractTextFromPdfBuffer(buffer);
+        const text = await extractTextFromPdfBuffer(buffer);
         if (text) {
           attachmentTexts.push(text);
         }
@@ -288,26 +287,82 @@ async function processMessage(
 }
 
 /**
- * Basic text extraction from a PDF buffer.
- * Pulls readable ASCII/UTF-8 text streams from the raw PDF bytes.
- * This is not a full PDF parser but handles most text-based PDFs.
+ * Extract text from a PDF buffer using the Anthropic API document content block.
+ * Falls back to basic regex extraction if the API key is not set.
  */
-function extractTextFromPdfBuffer(buffer: Buffer): string {
+async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+
+  if (apiKey) {
+    try {
+      const base64 = buffer.toString("base64");
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 4096,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "document",
+                  source: {
+                    type: "base64",
+                    media_type: "application/pdf",
+                    data: base64,
+                  },
+                },
+                {
+                  type: "text",
+                  text: "Extract all text content from this PDF document. Return only the extracted text, preserving the structure and formatting as much as possible. Do not add commentary.",
+                },
+              ],
+            },
+          ],
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const text = data.content?.find(
+          (c: { type: string; text?: string }) => c.type === "text"
+        )?.text;
+        if (text) return text;
+      } else {
+        console.warn("[pdf] Anthropic API extraction failed, falling back to regex:", res.status);
+      }
+    } catch (err: unknown) {
+      console.warn("[pdf] Anthropic API error, falling back to regex:", err instanceof Error ? err.message : err);
+    }
+  }
+
+  // Fallback: basic regex extraction for simple text-based PDFs
+  return extractTextFromPdfBufferBasic(buffer);
+}
+
+/**
+ * Basic regex-based PDF text extraction (fallback).
+ * Only works for PDFs with uncompressed text streams.
+ */
+function extractTextFromPdfBufferBasic(buffer: Buffer): string {
   const content = buffer.toString("latin1");
   const texts: string[] = [];
 
-  // Extract text between BT and ET markers (PDF text objects)
   const textObjectRegex = /BT\s([\s\S]*?)ET/g;
   let match;
   while ((match = textObjectRegex.exec(content)) !== null) {
     const block = match[1];
-    // Extract text from Tj, TJ, and ' operators
     const tjRegex = /\(([^)]*)\)\s*Tj/g;
     let tjMatch;
     while ((tjMatch = tjRegex.exec(block)) !== null) {
       texts.push(tjMatch[1]);
     }
-    // TJ arrays
     const tjArrayRegex = /\[([^\]]*)\]\s*TJ/g;
     let tjArrMatch;
     while ((tjArrMatch = tjArrayRegex.exec(block)) !== null) {
@@ -320,13 +375,11 @@ function extractTextFromPdfBuffer(buffer: Buffer): string {
     }
   }
 
-  const result = texts
+  return texts
     .join(" ")
     .replace(/\\n/g, "\n")
     .replace(/\\r/g, "")
     .replace(/\\t/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-
-  return result;
 }

@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guards";
 import { revalidatePath } from "next/cache";
+import { sendSms, isTwilioConfigured, normalizePhone } from "@/lib/twilio";
 
 export async function getActiveSubcontractors(params?: {
   tradeSlug?: string;
@@ -83,16 +84,24 @@ export async function sendSmsBlast(params: {
   // Add opt-out line
   fullMessage += "\n\nReply STOP to opt out.";
 
-  // Create the blast record
+  // Normalize phone numbers
+  const normalizedSubs = await Promise.all(
+    subs.map(async (sub) => ({
+      ...sub,
+      normalizedPhone: await normalizePhone(sub.phone),
+    }))
+  );
+
+  // Create the blast record with normalized phone numbers
   const blast = await prisma.smsBlast.create({
     data: {
       message: fullMessage,
       jobId: jobId || null,
       sentByUserId: admin.id,
       recipients: {
-        create: subs.map((sub) => ({
+        create: normalizedSubs.map((sub) => ({
           subcontractorId: sub.id,
-          phone: sub.phone,
+          phone: sub.normalizedPhone,
           status: "queued",
         })),
       },
@@ -100,54 +109,20 @@ export async function sendSmsBlast(params: {
     include: { recipients: true },
   });
 
-  // Send via Twilio
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const fromNumber = process.env.TWILIO_FROM_NUMBER;
-
-  if (accountSid && authToken && fromNumber) {
-    const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
-
+  // Send via centralized Twilio lib
+  if (await isTwilioConfigured()) {
     for (const recipient of blast.recipients) {
-      try {
-        const res = await fetch(
-          `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Basic ${auth}`,
-              "Content-Type": "application/x-www-form-urlencoded",
-            },
-            body: new URLSearchParams({
-              To: recipient.phone,
-              From: fromNumber,
-              Body: fullMessage,
-            }),
-          }
-        );
-
-        if (res.ok) {
-          const data = await res.json();
-          await prisma.smsRecipient.update({
-            where: { id: recipient.id },
-            data: { twilioSid: data.sid, status: "sent" },
-          });
-        } else {
-          await prisma.smsRecipient.update({
-            where: { id: recipient.id },
-            data: { status: "failed" },
-          });
-        }
-      } catch {
-        await prisma.smsRecipient.update({
-          where: { id: recipient.id },
-          data: { status: "failed" },
-        });
-      }
+      const result = await sendSms(recipient.phone, fullMessage);
+      await prisma.smsRecipient.update({
+        where: { id: recipient.id },
+        data: {
+          twilioSid: result.sid || null,
+          status: result.success ? "sent" : "failed",
+        },
+      });
     }
   } else {
     console.log("Twilio not configured. Blast created but not sent.");
-    // Mark all as unsent
     await prisma.smsRecipient.updateMany({
       where: { blastId: blast.id },
       data: { status: "not_configured" },
