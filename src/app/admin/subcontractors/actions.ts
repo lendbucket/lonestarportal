@@ -224,6 +224,22 @@ export async function deactivateSubcontractor(id: string) {
   revalidatePath(`/admin/subcontractors/${id}`);
 }
 
+export async function toggleSmsOptOut(id: string) {
+  await requireAdmin();
+  const sub = await prisma.subcontractor.findUnique({
+    where: { id },
+    select: { smsOptOut: true },
+  });
+  if (!sub) throw new Error("Subcontractor not found.");
+
+  await prisma.subcontractor.update({
+    where: { id },
+    data: { smsOptOut: !sub.smsOptOut },
+  });
+
+  revalidatePath(`/admin/subcontractors/${id}`);
+}
+
 export async function getServicesGrouped() {
   await requireAdmin();
   return prisma.serviceCategory.findMany({

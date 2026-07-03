@@ -13,6 +13,7 @@ export async function getActiveSubcontractors(params?: {
   return prisma.subcontractor.findMany({
     where: {
       status: "ACTIVE",
+      smsOptOut: false,
       phone: { not: "" },
       ...(params?.tradeSlug ? { trades: { some: { slug: params.tradeSlug } } } : {}),
       ...(params?.citySlug ? { serviceAreas: { some: { slug: params.citySlug } } } : {}),

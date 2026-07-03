@@ -1,12 +1,13 @@
 "use client";
 
 import { useTransition } from "react";
-import { activateSubcontractor, deactivateSubcontractor } from "../actions";
+import { activateSubcontractor, deactivateSubcontractor, toggleSmsOptOut } from "../actions";
 
 interface Props {
   sub: {
     id: string;
     status: string;
+    smsOptOut: boolean;
     userId?: string | null;
   };
 }
@@ -55,6 +56,18 @@ export function StatusActions({ sub }: Props) {
           {pending ? "Reactivating..." : "Reactivate"}
         </button>
       )}
+
+      <button
+        disabled={pending}
+        onClick={() => startTransition(() => toggleSmsOptOut(sub.id))}
+        className={`rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+          sub.smsOptOut
+            ? "border border-stone/20 text-stone hover:text-charcoal"
+            : "border border-red-200 text-red-700 hover:bg-red-50"
+        }`}
+      >
+        {sub.smsOptOut ? "SMS opted out (re-enable)" : "Opt out of SMS"}
+      </button>
     </div>
   );
 }

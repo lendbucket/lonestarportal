@@ -134,10 +134,31 @@ export async function offerJobToSubs(jobId: string, subcontractorIds: string[]) 
   });
 
   // Move job to OFFERED status
-  await prisma.job.update({
+  const job = await prisma.job.update({
     where: { id: jobId },
     data: { status: "OFFERED" },
+    include: { city: { select: { name: true } } },
   });
+
+  // Send SMS to each offered sub (skip opted-out)
+  const { sendSms } = await import("@/lib/twilio");
+  const subs = await prisma.subcontractor.findMany({
+    where: { id: { in: subcontractorIds }, smsOptOut: false, phone: { not: "" } },
+    select: { phone: true, contactName: true },
+  });
+
+  const portalUrl = "https://portal.lonestarcontractinggroup.com";
+  const jobLink = `${portalUrl}/portal/jobs/${jobId}`;
+
+  for (const sub of subs) {
+    const msg = [
+      `Lone Star Contracting: New job offer available.`,
+      `${job.title} in ${job.city.name}.`,
+      `View and respond: ${jobLink}`,
+      `Reply STOP to opt out.`,
+    ].join("\n");
+    await sendSms(sub.phone, msg);
+  }
 
   revalidatePath("/admin/jobs");
   revalidatePath(`/admin/jobs/${jobId}`);

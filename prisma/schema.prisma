@@ -117,6 +117,7 @@ model Subcontractor {
   phone           String
   email           String
   status          SubcontractorStatus @default(PENDING)
+  smsOptOut       Boolean             @default(false)
   crewSize        Int?
   yearsInTrade    Int?
   licenseInfo     String?             @db.Text

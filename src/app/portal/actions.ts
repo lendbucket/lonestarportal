@@ -32,7 +32,10 @@ export async function acceptJob(assignmentId: string) {
 
   const assignment = await prisma.jobAssignment.findUnique({
     where: { id: assignmentId },
-    include: { job: true },
+    include: {
+      job: { include: { city: { select: { name: true } } } },
+      subcontractor: { select: { companyName: true, contactName: true } },
+    },
   });
 
   if (!assignment || assignment.subcontractorId !== subcontractorId) {
@@ -64,6 +67,39 @@ export async function acceptJob(assignmentId: string) {
     where: { id: assignment.jobId },
     data: { status: "ASSIGNED" },
   });
+
+  // Notify admin by email (Resend)
+  const apiKey = process.env.RESEND_API_KEY;
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (apiKey && adminEmail) {
+    const portalUrl = process.env.NEXTAUTH_URL || "https://portal.lonestarcontractinggroup.com";
+    try {
+      await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          from: process.env.LEAD_FROM_EMAIL || "portal@lonestarcontractinggroup.com",
+          to: adminEmail,
+          subject: `Job accepted: ${assignment.job.title}`,
+          html: `
+            <div style="font-family: sans-serif; max-width: 480px;">
+              <h2 style="color: #1E2A38;">Job Accepted</h2>
+              <p><strong>${assignment.subcontractor.companyName}</strong> (${assignment.subcontractor.contactName}) has accepted the job:</p>
+              <p><strong>${assignment.job.title}</strong> in ${assignment.job.city.name}</p>
+              <p>All other offers for this job have been automatically declined.</p>
+              <p><a href="${portalUrl}/admin/jobs/${assignment.jobId}" style="display: inline-block; background: #A8451C; color: white; padding: 10px 24px; border-radius: 6px; text-decoration: none; font-weight: 600;">View Job</a></p>
+              <p style="color: #6B6660; font-size: 14px;">Lone Star Contracting Group</p>
+            </div>
+          `,
+        }),
+      });
+    } catch (err) {
+      console.error("[notify] Error sending job accepted email:", err);
+    }
+  }
 
   revalidatePath("/portal");
   revalidatePath("/admin/jobs");
