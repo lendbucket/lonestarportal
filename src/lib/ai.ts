@@ -1,3 +1,5 @@
+import "server-only";
+
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
 const FAST_MODEL = "claude-haiku-4-5-20251001";
 const STRONG_MODEL = "claude-sonnet-4-6";

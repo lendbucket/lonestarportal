@@ -1,4 +1,4 @@
-"use server";
+import "server-only";
 
 const TWILIO_API = "https://api.twilio.com/2010-04-01/Accounts";
 
@@ -36,7 +36,7 @@ function toE164(phone: string): string {
  * Normalize a phone number to E.164 format.
  * Handles common US formats: (512) 555-1234, 512-555-1234, 5125551234, +15125551234
  */
-export async function normalizePhone(phone: string): Promise<string> {
+export function normalizePhone(phone: string): string {
   return toE164(phone);
 }
 
@@ -87,6 +87,6 @@ export async function sendSms(to: string, body: string): Promise<SendResult> {
 /**
  * Check if Twilio is configured.
  */
-export async function isTwilioConfigured(): Promise<boolean> {
+export function isTwilioConfigured(): boolean {
   return getConfig() !== null;
 }

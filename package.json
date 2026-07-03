@@ -22,7 +22,8 @@
     "next-auth": "^4.24.14",
     "prisma": "^6.19.3",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",

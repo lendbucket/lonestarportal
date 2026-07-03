@@ -1,3 +1,5 @@
+import "server-only";
+
 import { prisma } from "./prisma";
 
 const MAX_ATTEMPTS = 5;

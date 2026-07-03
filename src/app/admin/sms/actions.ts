@@ -87,12 +87,10 @@ export async function sendSmsBlast(params: {
   fullMessage += "\n\nReply STOP to opt out.";
 
   // Normalize phone numbers
-  const normalizedSubs = await Promise.all(
-    subs.map(async (sub) => ({
-      ...sub,
-      normalizedPhone: await normalizePhone(sub.phone),
-    }))
-  );
+  const normalizedSubs = subs.map((sub) => ({
+    ...sub,
+    normalizedPhone: normalizePhone(sub.phone),
+  }));
 
   // Create the blast record with normalized phone numbers
   const blast = await prisma.smsBlast.create({
@@ -112,7 +110,7 @@ export async function sendSmsBlast(params: {
   });
 
   // Send via centralized Twilio lib
-  if (await isTwilioConfigured()) {
+  if (isTwilioConfigured()) {
     for (const recipient of blast.recipients) {
       const result = await sendSms(recipient.phone, fullMessage);
       await prisma.smsRecipient.update({

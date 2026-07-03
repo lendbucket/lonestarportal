@@ -1,3 +1,5 @@
+import "server-only";
+
 /**
  * Send notification emails via Resend.
  */
