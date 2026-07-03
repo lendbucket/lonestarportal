@@ -2,16 +2,18 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSolicitation, getBidProfileDocuments, getAttachmentSignedUrl, getBidDocumentSignedUrl } from "../actions";
+import { getSolicitation, getBidProfileDocuments, getAttachmentSignedUrl, getBidDocumentSignedUrl, getServicesForConvert, getCitiesForConvert } from "../actions";
 import { SolicitationDetail } from "./SolicitationDetail";
 
 export default async function SolicitationPage(props: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await props.params;
-  const [solicitation, documents] = await Promise.all([
+  const [solicitation, documents, services, cities] = await Promise.all([
     getSolicitation(id),
     getBidProfileDocuments(),
+    getServicesForConvert(),
+    getCitiesForConvert(),
   ]);
 
   if (!solicitation) notFound();
@@ -44,6 +46,8 @@ export default async function SolicitationPage(props: {
       <SolicitationDetail
         solicitation={{ ...solicitation, attachments: attachmentsWithUrls }}
         documents={documentsWithUrls}
+        services={services}
+        cities={cities}
       />
     </div>
   );

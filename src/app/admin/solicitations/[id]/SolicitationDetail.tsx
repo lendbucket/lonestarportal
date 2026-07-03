@@ -94,12 +94,29 @@ const statusLabels: Record<string, string> = {
   SKIPPED: "Skipped",
 };
 
+interface ServiceOption {
+  id: string;
+  slug: string;
+  name: string;
+}
+
+interface CityOption {
+  id: string;
+  slug: string;
+  name: string;
+  region: string;
+}
+
 export function SolicitationDetail({
   solicitation: sol,
   documents,
+  services = [],
+  cities = [],
 }: {
   solicitation: Solicitation;
   documents: BidDoc[];
+  services?: ServiceOption[];
+  cities?: CityOption[];
 }) {
   const { data: session } = useSession();
   const [pending, startTransition] = useTransition();
@@ -111,6 +128,25 @@ export function SolicitationDetail({
   );
   const [message, setMessage] = useState<string | null>(null);
   const [showEmail, setShowEmail] = useState(false);
+  const [showConvertForm, setShowConvertForm] = useState(false);
+
+  // Default service from tradeCategory (fuzzy match)
+  const defaultServiceId = sol.tradeCategory
+    ? services.find((s) =>
+        s.name.toLowerCase().includes(sol.tradeCategory!.toLowerCase()) ||
+        sol.tradeCategory!.toLowerCase().includes(s.name.toLowerCase())
+      )?.id || ""
+    : "";
+
+  // Default city from location (fuzzy match)
+  const defaultCityId = sol.location
+    ? cities.find((c) =>
+        sol.location!.toLowerCase().includes(c.name.toLowerCase())
+      )?.id || ""
+    : "";
+
+  const [convertServiceId, setConvertServiceId] = useState(defaultServiceId);
+  const [convertCityId, setConvertCityId] = useState(defaultCityId);
 
   const isPastDue = sol.dueDate && new Date(sol.dueDate) < new Date();
   const requirements: string[] = Array.isArray(sol.requirements)
@@ -176,9 +212,15 @@ export function SolicitationDetail({
   }
 
   function handleConvertToJob() {
-    if (!confirm("Create a job from this solicitation?")) return;
+    if (!convertServiceId || !convertCityId) {
+      setMessage("Select a service and city before converting.");
+      return;
+    }
     startTransition(async () => {
-      await convertToJob(sol.id);
+      await convertToJob(sol.id, {
+        serviceId: convertServiceId,
+        cityId: convertCityId,
+      });
     });
   }
 
@@ -630,14 +672,57 @@ export function SolicitationDetail({
                 </div>
               )}
 
-              {sol.status === "WON" && !sol.jobId && (
+              {sol.status === "WON" && !sol.jobId && !showConvertForm && (
                 <button
-                  onClick={handleConvertToJob}
+                  onClick={() => setShowConvertForm(true)}
                   disabled={pending}
                   className="w-full rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
                 >
                   Convert to Job
                 </button>
+              )}
+
+              {sol.status === "WON" && !sol.jobId && showConvertForm && (
+                <div className="space-y-3 rounded-md border border-stone/20 p-3">
+                  <p className="text-xs font-medium text-charcoal">
+                    Select service and city for the new job:
+                  </p>
+                  <select
+                    value={convertServiceId}
+                    onChange={(e) => setConvertServiceId(e.target.value)}
+                    className="w-full rounded-md border border-stone/20 px-3 py-2 text-sm focus:border-clay focus:outline-none focus:ring-1 focus:ring-clay"
+                  >
+                    <option value="">Select service...</option>
+                    {services.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={convertCityId}
+                    onChange={(e) => setConvertCityId(e.target.value)}
+                    className="w-full rounded-md border border-stone/20 px-3 py-2 text-sm focus:border-clay focus:outline-none focus:ring-1 focus:ring-clay"
+                  >
+                    <option value="">Select city...</option>
+                    {cities.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name} ({c.region})</option>
+                    ))}
+                  </select>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleConvertToJob}
+                      disabled={pending || !convertServiceId || !convertCityId}
+                      className="flex-1 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                    >
+                      {pending ? "Creating..." : "Create Job"}
+                    </button>
+                    <button
+                      onClick={() => setShowConvertForm(false)}
+                      className="rounded-md border border-stone/20 px-3 py-2 text-sm text-stone hover:text-charcoal transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               )}
 
               {sol.job && (

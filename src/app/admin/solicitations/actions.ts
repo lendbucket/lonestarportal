@@ -353,24 +353,24 @@ export async function markLost(id: string) {
   revalidatePath(`/admin/solicitations/${id}`);
 }
 
-export async function convertToJob(id: string) {
+export async function convertToJob(
+  id: string,
+  params: { serviceId: string; cityId: string }
+) {
   await requireAdmin();
   const solicitation = await prisma.solicitation.findUnique({ where: { id } });
   if (!solicitation) throw new Error("Solicitation not found.");
 
-  // We need a service and city to create a job. Use defaults or first available.
-  const defaultService = await prisma.service.findFirst();
-  const defaultCity = await prisma.city.findFirst();
-
-  if (!defaultService || !defaultCity) {
-    throw new Error("At least one service and one city must exist to create a job.");
+  const { serviceId, cityId } = params;
+  if (!serviceId || !cityId) {
+    throw new Error("Service and city are required to create a job.");
   }
 
   const job = await prisma.job.create({
     data: {
       title: solicitation.title,
-      serviceId: defaultService.id,
-      cityId: defaultCity.id,
+      serviceId,
+      cityId,
       customerName: solicitation.issuingEntity,
       scope: solicitation.scope,
       status: "DRAFT",
@@ -385,6 +385,22 @@ export async function convertToJob(id: string) {
   revalidatePath("/admin/solicitations");
   revalidatePath("/admin/jobs");
   redirect(`/admin/jobs/${job.id}`);
+}
+
+export async function getServicesForConvert() {
+  await requireAdmin();
+  return prisma.service.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, slug: true, name: true },
+  });
+}
+
+export async function getCitiesForConvert() {
+  await requireAdmin();
+  return prisma.city.findMany({
+    orderBy: [{ region: "asc" }, { name: "asc" }],
+    select: { id: true, slug: true, name: true, region: true },
+  });
 }
 
 export async function getBidProfileDocuments() {
