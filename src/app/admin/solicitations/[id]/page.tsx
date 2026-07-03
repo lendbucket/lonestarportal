@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSolicitation, getBidProfileDocuments } from "../actions";
+import { getSolicitation, getBidProfileDocuments, getAttachmentSignedUrl, getBidDocumentSignedUrl } from "../actions";
 import { SolicitationDetail } from "./SolicitationDetail";
 
 export default async function SolicitationPage(props: {
@@ -16,6 +16,21 @@ export default async function SolicitationPage(props: {
 
   if (!solicitation) notFound();
 
+  // Resolve signed URLs for attachments and bid documents
+  const attachmentsWithUrls = await Promise.all(
+    solicitation.attachments.map(async (att) => ({
+      ...att,
+      signedUrl: await getAttachmentSignedUrl(att.fileUrl).catch(() => null),
+    }))
+  );
+
+  const documentsWithUrls = await Promise.all(
+    documents.map(async (doc) => ({
+      ...doc,
+      signedUrl: await getBidDocumentSignedUrl(doc.fileUrl).catch(() => null),
+    }))
+  );
+
   return (
     <div>
       <div className="mb-6">
@@ -26,7 +41,10 @@ export default async function SolicitationPage(props: {
           &larr; Back to Solicitations
         </Link>
       </div>
-      <SolicitationDetail solicitation={solicitation} documents={documents} />
+      <SolicitationDetail
+        solicitation={{ ...solicitation, attachments: attachmentsWithUrls }}
+        documents={documentsWithUrls}
+      />
     </div>
   );
 }

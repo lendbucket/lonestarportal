@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getJob, getMatchingSubcontractors } from "../actions";
+import { getJob, getMatchingSubcontractors, getJobPhotoSignedUrl } from "../actions";
 import { JobStatusFlow } from "./JobStatusFlow";
 import { OfferPanel } from "./OfferPanel";
 import { JobScheduleForm } from "./JobScheduleForm";
@@ -116,14 +116,17 @@ export default async function JobDetailPage({ params }: Props) {
             <div className="rounded-lg border border-stone/10 bg-white p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-charcoal mb-3">Photos</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {job.photos.map((photo) => (
-                  <div key={photo.id} className="rounded-md overflow-hidden border border-stone/10">
-                    <img src={photo.url} alt={photo.caption || "Job photo"} className="w-full h-32 object-cover" />
-                    {photo.caption && (
-                      <p className="px-2 py-1 text-xs text-stone">{photo.caption}</p>
-                    )}
-                  </div>
-                ))}
+                {await Promise.all(job.photos.map(async (photo) => {
+                  const signedUrl = await getJobPhotoSignedUrl(photo.url);
+                  return (
+                    <div key={photo.id} className="rounded-md overflow-hidden border border-stone/10">
+                      <img src={signedUrl} alt={photo.caption || "Job photo"} className="w-full h-32 object-cover" />
+                      {photo.caption && (
+                        <p className="px-2 py-1 text-xs text-stone">{photo.caption}</p>
+                      )}
+                    </div>
+                  );
+                }))}
               </div>
             </div>
           )}

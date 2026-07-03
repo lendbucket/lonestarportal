@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/auth-guards";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { JobStatus } from "@prisma/client";
+import { getSignedUrl } from "@/lib/storage";
 
 export async function getJobs() {
   await requireAdmin();
@@ -140,6 +141,11 @@ export async function offerJobToSubs(jobId: string, subcontractorIds: string[]) 
 
   revalidatePath("/admin/jobs");
   revalidatePath(`/admin/jobs/${jobId}`);
+}
+
+export async function getJobPhotoSignedUrl(photoPath: string) {
+  await requireAdmin();
+  return getSignedUrl("job-photos", photoPath);
 }
 
 export async function getServices() {

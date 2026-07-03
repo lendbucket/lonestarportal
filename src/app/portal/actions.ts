@@ -3,6 +3,12 @@
 import { prisma } from "@/lib/prisma";
 import { requireSubcontractor } from "@/lib/auth-guards";
 import { revalidatePath } from "next/cache";
+import { uploadPrivateFile, getSignedUrl } from "@/lib/storage";
+
+export async function getJobPhotoUrl(photoPath: string) {
+  await requireSubcontractor();
+  return getSignedUrl("job-photos", photoPath);
+}
 
 export async function getMyJobs() {
   const { subcontractorId } = await requireSubcontractor();
@@ -102,39 +108,15 @@ export async function uploadJobPhoto(jobId: string, formData: FormData) {
 
   if (!file || file.size === 0) throw new Error("No file provided.");
 
-  // Upload to Supabase Storage
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceKey) {
-    throw new Error("Storage not configured.");
-  }
-
-  const fileName = `${jobId}/${Date.now()}-${file.name}`;
+  const storagePath = `${jobId}/${Date.now()}-${file.name}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  const uploadRes = await fetch(
-    `${supabaseUrl}/storage/v1/object/job-photos/${fileName}`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${serviceKey}`,
-        "Content-Type": file.type,
-      },
-      body: buffer,
-    }
-  );
-
-  if (!uploadRes.ok) {
-    throw new Error("Failed to upload photo.");
-  }
-
-  const publicUrl = `${supabaseUrl}/storage/v1/object/public/job-photos/${fileName}`;
+  await uploadPrivateFile("job-photos", storagePath, buffer, file.type);
 
   await prisma.jobPhoto.create({
     data: {
       jobId,
-      url: publicUrl,
+      url: storagePath,
       caption: caption?.trim() || null,
       uploadedBySubcontractorId: subcontractorId,
     },

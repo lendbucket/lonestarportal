@@ -1,0 +1,31 @@
+-- BACKFILL: Convert existing public URLs to storage paths for private buckets.
+--
+-- Existing rows in JobPhoto, SolicitationAttachment, and BidDocument may store
+-- full public URLs like:
+--   https://<project>.supabase.co/storage/v1/object/public/job-photos/<path>
+--
+-- The application now stores only the storage path (e.g. "<jobId>/<timestamp>-<filename>")
+-- and generates short-lived signed URLs at read time.
+--
+-- The storage.ts helper automatically strips the public URL prefix when generating
+-- signed URLs, so existing rows will continue to work without any database changes.
+-- However, you should run the following to normalize the data:
+--
+-- UPDATE "JobPhoto"
+-- SET url = regexp_replace(url, '^https://[^/]+/storage/v1/object/public/job-photos/', '')
+-- WHERE url LIKE '%/storage/v1/object/public/job-photos/%';
+--
+-- UPDATE "SolicitationAttachment"
+-- SET "fileUrl" = regexp_replace("fileUrl", '^https://[^/]+/storage/v1/object/public/solicitation-attachments/', '')
+-- WHERE "fileUrl" LIKE '%/storage/v1/object/public/solicitation-attachments/%';
+--
+-- UPDATE "BidDocument"
+-- SET "fileUrl" = regexp_replace("fileUrl", '^https://[^/]+/storage/v1/object/public/bid-documents/', '')
+-- WHERE "fileUrl" LIKE '%/storage/v1/object/public/bid-documents/%';
+--
+-- After running the backfill, switch both Supabase buckets to private:
+--   1. Go to Supabase Dashboard > Storage
+--   2. For each bucket (job-photos, solicitation-attachments, bid-documents):
+--      - Click the bucket settings
+--      - Toggle "Public" OFF
+--   3. Remove any RLS policies that grant public read access

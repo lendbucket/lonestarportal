@@ -19,6 +19,7 @@ interface Attachment {
   id: string;
   label: string;
   fileUrl: string;
+  signedUrl?: string | null;
   mimeType: string | null;
   extractedText: string | null;
 }
@@ -40,6 +41,7 @@ interface BidDoc {
   id: string;
   label: string;
   fileUrl: string;
+  signedUrl?: string | null;
   mimeType: string | null;
 }
 
@@ -502,7 +504,7 @@ export function SolicitationDetail({
                         {doc.label}
                       </span>
                       <a
-                        href={doc.fileUrl}
+                        href={doc.signedUrl || doc.fileUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs text-clay hover:underline"
@@ -556,7 +558,7 @@ export function SolicitationDetail({
                       {att.mimeType?.includes("pdf") ? "PDF" : "DOC"}
                     </div>
                     <a
-                      href={att.fileUrl}
+                      href={att.signedUrl || att.fileUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-sm font-medium text-charcoal hover:text-clay"

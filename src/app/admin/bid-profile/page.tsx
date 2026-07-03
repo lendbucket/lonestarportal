@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { getBidProfile } from "./actions";
+import { getBidProfile, getBidDocumentSignedUrl } from "./actions";
 import { ProfileForm } from "./ProfileForm";
 import { LicensesSection } from "./LicensesSection";
 import { InsuranceSection } from "./InsuranceSection";
@@ -10,6 +10,16 @@ import { DocumentsSection } from "./DocumentsSection";
 
 export default async function BidProfilePage() {
   const profile = await getBidProfile();
+
+  // Resolve signed URLs for documents
+  const documentsWithUrls = profile
+    ? await Promise.all(
+        profile.documents.map(async (doc) => ({
+          ...doc,
+          signedUrl: await getBidDocumentSignedUrl(doc.fileUrl).catch(() => null),
+        }))
+      )
+    : [];
 
   return (
     <div>
@@ -31,7 +41,7 @@ export default async function BidProfilePage() {
             <InsuranceSection policies={profile.insurancePolicies} />
             <CertificationsSection certifications={profile.certifications} />
             <ReferencesSection references={profile.references} />
-            <DocumentsSection documents={profile.documents} />
+            <DocumentsSection documents={documentsWithUrls} />
           </>
         )}
 

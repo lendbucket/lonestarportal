@@ -14,6 +14,7 @@ import {
   decodeBase64UrlToBuffer,
 } from "./gmail";
 import { classifyEmail, extractSolicitation } from "./ai";
+import { uploadPrivateFile } from "./storage";
 
 interface SyncResult {
   processed: number;
@@ -248,37 +249,26 @@ async function processMessage(
     // Upload attachments for the first solicitation from this message
     if (isFirst && attachmentFiles.length > 0) {
       for (const att of attachmentFiles) {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        const storagePath = `solicitations/${solicitation.id}/${Date.now()}-${att.filename}`;
+        try {
+          await uploadPrivateFile(
+            "solicitation-attachments",
+            storagePath,
+            Buffer.from(att.buffer),
+            att.mimeType
+          );
 
-        if (supabaseUrl && serviceKey) {
-          const fileName = `solicitations/${solicitation.id}/${Date.now()}-${att.filename}`;
-          try {
-            await fetch(
-              `${supabaseUrl}/storage/v1/object/solicitation-attachments/${fileName}`,
-              {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${serviceKey}`,
-                  "Content-Type": att.mimeType,
-                },
-                body: new Uint8Array(att.buffer),
-              }
-            );
-
-            const publicUrl = `${supabaseUrl}/storage/v1/object/public/solicitation-attachments/${fileName}`;
-            await prisma.solicitationAttachment.create({
-              data: {
-                solicitationId: solicitation.id,
-                label: att.filename,
-                fileUrl: publicUrl,
-                mimeType: att.mimeType,
-                extractedText: att.extractedText,
-              },
-            });
-          } catch (err: unknown) {
-            console.warn(`Failed to upload attachment ${att.filename}:`, err instanceof Error ? err.message : err);
-          }
+          await prisma.solicitationAttachment.create({
+            data: {
+              solicitationId: solicitation.id,
+              label: att.filename,
+              fileUrl: storagePath,
+              mimeType: att.mimeType,
+              extractedText: att.extractedText,
+            },
+          });
+        } catch (err: unknown) {
+          console.warn(`Failed to upload attachment ${att.filename}:`, err instanceof Error ? err.message : err);
         }
       }
     }

@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guards";
 import { revalidatePath } from "next/cache";
+import { uploadPrivateFile, getSignedUrl } from "@/lib/storage";
 
 export async function getBidProfile() {
   await requireAdmin();
@@ -190,44 +191,26 @@ export async function uploadBidDocument(formData: FormData) {
   if (!file || file.size === 0) throw new Error("No file provided.");
   if (!label) throw new Error("Label is required.");
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceKey) {
-    throw new Error("Storage not configured.");
-  }
-
-  const fileName = `bid-documents/${profile.id}/${Date.now()}-${file.name}`;
+  const storagePath = `bid-documents/${profile.id}/${Date.now()}-${file.name}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  const uploadRes = await fetch(
-    `${supabaseUrl}/storage/v1/object/bid-documents/${fileName}`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${serviceKey}`,
-        "Content-Type": file.type,
-      },
-      body: buffer,
-    }
-  );
-
-  if (!uploadRes.ok) {
-    throw new Error("Failed to upload document.");
-  }
-
-  const publicUrl = `${supabaseUrl}/storage/v1/object/public/bid-documents/${fileName}`;
+  await uploadPrivateFile("bid-documents", storagePath, buffer, file.type);
 
   await prisma.bidDocument.create({
     data: {
       profileId: profile.id,
       label,
-      fileUrl: publicUrl,
+      fileUrl: storagePath,
       mimeType: file.type || null,
     },
   });
 
   revalidatePath("/admin/bid-profile");
+}
+
+export async function getBidDocumentSignedUrl(filePath: string) {
+  await requireAdmin();
+  return getSignedUrl("bid-documents", filePath);
 }
 
 export async function deleteBidDocument(id: string) {

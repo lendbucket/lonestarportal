@@ -5,6 +5,7 @@ import { notifyOwnerDraftsReady } from "@/lib/notify";
 import { requireAdmin } from "@/lib/auth-guards";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { uploadPrivateFile, getSignedUrl } from "@/lib/storage";
 
 export async function getSolicitations(params: {
   status?: string;
@@ -102,39 +103,31 @@ export async function uploadSolicitationDocument(id: string, formData: FormData)
   const file = formData.get("file") as File;
   if (!file || file.size === 0) throw new Error("No file provided.");
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) throw new Error("Storage not configured.");
-
-  const fileName = `solicitations/${id}/${Date.now()}-${file.name}`;
+  const storagePath = `solicitations/${id}/${Date.now()}-${file.name}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  const uploadRes = await fetch(
-    `${supabaseUrl}/storage/v1/object/solicitation-attachments/${fileName}`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${serviceKey}`,
-        "Content-Type": file.type,
-      },
-      body: buffer,
-    }
-  );
-
-  if (!uploadRes.ok) throw new Error("Failed to upload document.");
-
-  const publicUrl = `${supabaseUrl}/storage/v1/object/public/solicitation-attachments/${fileName}`;
+  await uploadPrivateFile("solicitation-attachments", storagePath, buffer, file.type);
 
   await prisma.solicitationAttachment.create({
     data: {
       solicitationId: id,
       label: file.name,
-      fileUrl: publicUrl,
+      fileUrl: storagePath,
       mimeType: file.type || null,
     },
   });
 
   revalidatePath(`/admin/solicitations/${id}`);
+}
+
+export async function getAttachmentSignedUrl(filePath: string) {
+  await requireAdmin();
+  return getSignedUrl("solicitation-attachments", filePath);
+}
+
+export async function getBidDocumentSignedUrl(filePath: string) {
+  await requireAdmin();
+  return getSignedUrl("bid-documents", filePath);
 }
 
 // ─── Draft actions ───

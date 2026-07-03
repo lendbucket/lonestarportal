@@ -7,6 +7,7 @@ interface Document {
   id: string;
   label: string;
   fileUrl: string;
+  signedUrl?: string | null;
   mimeType: string | null;
   createdAt: Date;
 }
@@ -50,7 +51,7 @@ export function DocumentsSection({ documents }: { documents: Document[] }) {
                 </div>
                 <div>
                   <a
-                    href={doc.fileUrl}
+                    href={doc.signedUrl || doc.fileUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-sm font-medium text-charcoal hover:text-clay"
